@@ -1,10 +1,14 @@
 Board evoBoard;
+
 final int SEED = 51;
 final float NOISE_STEP_SIZE = 0.1;
 final int BOARD_WIDTH = 100;
 final int BOARD_HEIGHT = 100;
 
+final int WINDOW_WIDTH = 1920;
+final int WINDOW_HEIGHT = 1080;
 final float SCALE_TO_FIX_BUG = 100;
+final float GROSS_OVERALL_SCALE_FACTOR = ((float)WINDOW_HEIGHT)/BOARD_HEIGHT/SCALE_TO_FIX_BUG;
 
 final double TIME_STEP = 0.001;
 final float MIN_TEMPERATURE = -0.5;
@@ -13,9 +17,6 @@ final float MAX_TEMPERATURE = 1.0;
 final int ROCKS_TO_ADD = 0;
 final int CREATURE_MINIMUM = 60;
 
-float scaleFactor;
-int windowWidth;
-int windowHeight;
 float cameraX = BOARD_WIDTH*0.5;
 float cameraY = BOARD_HEIGHT*0.5;
 float cameraR = 0;
@@ -26,26 +27,22 @@ float prevMouseX;
 float prevMouseY;
 boolean draggedFar = false;
 final String INITIAL_FILE_NAME = "PIC";
+
 void settings() {
-  // get users window size
-  windowWidth = displayWidth;
-  windowHeight = displayHeight;
-
-  // set scaling to be custom to current users screen size
-  scaleFactor = ((float)windowHeight)/BOARD_HEIGHT/SCALE_TO_FIX_BUG;
-
-  //Alow window to be docked and resized the UI still needs to be changed to make UI look good after resize
-  size(windowWidth, windowHeight);
+  size(WINDOW_WIDTH, WINDOW_HEIGHT);
 }
+
 void setup() {
-  surface.setResizable(true);
-  colorMode(HSB, 1.0);
+  colorMode(HSB,1.0);
   font = loadFont("Jygquip1-48.vlw");
   evoBoard = new Board(BOARD_WIDTH, BOARD_HEIGHT, NOISE_STEP_SIZE, MIN_TEMPERATURE, MAX_TEMPERATURE, 
-    ROCKS_TO_ADD, CREATURE_MINIMUM, SEED, INITIAL_FILE_NAME, TIME_STEP);
+  ROCKS_TO_ADD, CREATURE_MINIMUM, SEED, INITIAL_FILE_NAME, TIME_STEP);
   resetZoom();
+  frameRate(300);
 }
+double sum = 0;
 void draw() {
+  Profiler.measure("EvolvioColor.draw");
   for (int iteration = 0; iteration < evoBoard.playSpeed; iteration++) {
     evoBoard.iterate(TIME_STEP);
   }
@@ -68,11 +65,11 @@ void draw() {
     cameraX = (float)evoBoard.selectedCreature.px;
     cameraY = (float)evoBoard.selectedCreature.py;
     cameraR = -PI/2.0-(float)evoBoard.selectedCreature.rotation;
-  } else {
+  }else{
     cameraR = 0;
   }
   pushMatrix();
-  scale(scaleFactor);
+  scale(GROSS_OVERALL_SCALE_FACTOR);
   evoBoard.drawBlankBoard(SCALE_TO_FIX_BUG);
   translate(BOARD_WIDTH*0.5*SCALE_TO_FIX_BUG, BOARD_HEIGHT*0.5*SCALE_TO_FIX_BUG);
   scale(zoom);
@@ -80,38 +77,48 @@ void draw() {
     rotate(cameraR);
   }
   translate(-cameraX*SCALE_TO_FIX_BUG, -cameraY*SCALE_TO_FIX_BUG);
-  evoBoard.drawBoard(SCALE_TO_FIX_BUG, zoom, (int)toWorldXCoordinate(mouseX, mouseY), (int)toWorldYCoordinate(mouseX, mouseY));
+  evoBoard.drawBoard(SCALE_TO_FIX_BUG, zoom, (int)toWorldXCoordinate(mouseX, mouseY), (int)toWorldYCoordinate(mouseX, mouseY), -cameraX*SCALE_TO_FIX_BUG, -cameraY*SCALE_TO_FIX_BUG);
   popMatrix();
-  evoBoard.drawUI(SCALE_TO_FIX_BUG, zoom, TIME_STEP, windowHeight, 0, windowWidth, windowHeight, font);
+  evoBoard.drawUI(SCALE_TO_FIX_BUG, TIME_STEP, WINDOW_HEIGHT, 0, WINDOW_WIDTH, WINDOW_HEIGHT, font);
 
   evoBoard.fileSave();
   prevMouseX = mouseX;
   prevMouseY = mouseY;
+  Profiler.stop();
+  
+  Profiler.reset(frameCount % 100 == 0);
+  //println(frameRate);
+  sum += frameRate;
+  if(frameCount % 100 == 0)
+    println(sum/frameCount);
 }
 void mouseWheel(MouseEvent event) {
+  Profiler.measure("Input");
   float delta = event.getCount();
   if (delta >= 0.5) {
     setZoom(zoom*0.90909, mouseX, mouseY);
   } else if (delta <= -0.5) {
     setZoom(zoom*1.1, mouseX, mouseY);
   }
+  Profiler.stop();
 }
 void mousePressed() {
-  if (mouseX < windowHeight) {
+  Profiler.measure("Input");
+  if (mouseX < WINDOW_HEIGHT) {
     dragging = 1;
   } else {
-    if (abs(mouseX-(windowHeight+65)) <= 60 && abs(mouseY-147) <= 60 && evoBoard.selectedCreature != null) {
-      cameraX = (float)evoBoard.selectedCreature.px;
-      cameraY = (float)evoBoard.selectedCreature.py;
-      zoom = 16;
+    if (abs(mouseX-(WINDOW_HEIGHT+65)) <= 60 && abs(mouseY-147) <= 60 && evoBoard.selectedCreature != null) {
+        cameraX = (float)evoBoard.selectedCreature.px;
+        cameraY = (float)evoBoard.selectedCreature.py;
+        zoom = 16;
     } else if (mouseY >= 95 && mouseY < 135 && evoBoard.selectedCreature == null) {
-      if (mouseX >= windowHeight+10 && mouseX < windowHeight+230) {
+      if (mouseX >= WINDOW_HEIGHT+10 && mouseX < WINDOW_HEIGHT+230) {
         resetZoom();
-      } else if (mouseX >= windowHeight+240 && mouseX < windowHeight+460) {
+      } else if (mouseX >= WINDOW_HEIGHT+240 && mouseX < WINDOW_HEIGHT+460) {
         evoBoard.creatureRankMetric = (evoBoard.creatureRankMetric+1)%8;
       }
     } else if (mouseY >= 570) {
-      float x = (mouseX-(windowHeight+10));
+      float x = (mouseX-(WINDOW_HEIGHT+10));
       float y = (mouseY-570);
       boolean clickedOnLeft = (x%230 < 110);
       if (x >= 0 && x < 2*230 && y >= 0 && y < 4*50 && x%230 < 220 && y%50 < 40) {
@@ -148,17 +155,17 @@ void mousePressed() {
           if (evoBoard.textSaveInterval >= 0.7) {
             evoBoard.textSaveInterval = Math.round(evoBoard.textSaveInterval);
           }
-        } else if (buttonNum == 6) {
+        }else if(buttonNum == 6){
           if (clickedOnLeft) {
-            if (evoBoard.playSpeed >= 2) {
+            if(evoBoard.playSpeed >= 2){
               evoBoard.playSpeed /= 2;
-            } else {
+            }else{
               evoBoard.playSpeed = 0;
             }
           } else {
-            if (evoBoard.playSpeed == 0) {
+            if(evoBoard.playSpeed == 0){
               evoBoard.playSpeed = 1;
-            } else {
+            }else{
               evoBoard.playSpeed *= 2;
             }
           }
@@ -185,10 +192,12 @@ void mousePressed() {
     }
   }
   draggedFar = false;
+  Profiler.stop();
 }
 void mouseReleased() {
+  Profiler.measure("Input");
   if (!draggedFar) {
-    if (mouseX < windowHeight) { // DO NOT LOOK AT THIS CODE EITHER it is bad
+    if (mouseX < WINDOW_HEIGHT) { // DO NOT LOOK AT THIS CODE EITHER it is bad
       dragging = 1;
       float mX = toWorldXCoordinate(mouseX, mouseY);
       float mY = toWorldYCoordinate(mouseX, mouseY);
@@ -211,6 +220,7 @@ void mouseReleased() {
     }
   }
   dragging = 0;
+  Profiler.stop();
 }
 void resetZoom() {
   cameraX = BOARD_WIDTH*0.5;
@@ -225,16 +235,16 @@ void setZoom(float target, float x, float y) {
   zoom = target;
 }
 float grossify(float input, float total) { // Very weird function
-  return (input/scaleFactor-total*0.5*SCALE_TO_FIX_BUG)/SCALE_TO_FIX_BUG;
+  return (input/GROSS_OVERALL_SCALE_FACTOR-total*0.5*SCALE_TO_FIX_BUG)/SCALE_TO_FIX_BUG;
 }
 float toWorldXCoordinate(float x, float y) {
-  float w = windowHeight/2;
+  float w = WINDOW_HEIGHT/2;
   float angle = atan2(y-w, x-w);
   float dist = dist(w, w, x, y);
   return cameraX+grossify(cos(angle-cameraR)*dist+w, BOARD_WIDTH)/zoom;
 }
 float toWorldYCoordinate(float x, float y) {
-  float w = windowHeight/2;
+  float w = WINDOW_HEIGHT/2;
   float angle = atan2(y-w, x-w);
   float dist = dist(w, w, x, y);
   return cameraY+grossify(sin(angle-cameraR)*dist+w, BOARD_HEIGHT)/zoom;
